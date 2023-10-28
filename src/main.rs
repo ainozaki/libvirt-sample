@@ -12,9 +12,12 @@ fn show_hypervisor_info(conn: &Connect) -> Result<(), Error> {
             hv_ver %= 1000000;
             let minor = hv_ver / 1000;
             let release = hv_ver % 1000;
-            println!(
+            log::info!(
                 "Hypervisor: '{}' version: {}.{}.{}",
-                hv_type, major, minor, release
+                hv_type,
+                major,
+                minor,
+                release
             );
             return Ok(());
         }
@@ -27,9 +30,10 @@ fn show_domains(conn: &Connect) -> Result<(), Error> {
 
     if let Ok(num_active_domains) = conn.num_of_domains() {
         if let Ok(num_inactive_domains) = conn.num_of_defined_domains() {
-            println!(
+            log::info!(
                 "There are {} active and {} inactive domains",
-                num_active_domains, num_inactive_domains
+                num_active_domains,
+                num_inactive_domains
             );
             /* Return a list of all active and inactive domains. Using this API
              * instead of virConnectListDomains() and virConnectListDefinedDomains()
@@ -40,65 +44,14 @@ fn show_domains(conn: &Connect) -> Result<(), Error> {
                     let id = dom.get_id().unwrap_or(0);
                     let name = dom.get_name().unwrap_or_else(|_| String::from("no-name"));
                     let active = dom.is_active().unwrap_or(false);
-                    println!("ID: {}, Name: {}, Active: {}", id, name, active);
+                    log::info!("ID: {}, Name: {}, Active: {}", id, name, active);
                     if let Ok(dinfo) = dom.get_info() {
-                        println!("Domain info:");
-                        println!("    State: {}", dinfo.state);
-                        println!("    Max Memory: {}", dinfo.max_mem);
-                        println!("    Memory: {}", dinfo.memory);
-                        println!("    CPUs: {}", dinfo.nr_virt_cpu);
-                        println!("    CPU Time: {}", dinfo.cpu_time);
-                    }
-                    if let Ok(memtune) = dom.get_memory_parameters(0) {
-                        println!("Memory tune:");
-                        println!("    Hard Limit: {}", memtune.hard_limit.unwrap_or(0));
-                        println!("    Soft Limit: {}", memtune.soft_limit.unwrap_or(0));
-                        println!("    Min Guarantee: {}", memtune.min_guarantee.unwrap_or(0));
-                        println!(
-                            "    Swap Hard Limit: {}",
-                            memtune.swap_hard_limit.unwrap_or(0)
-                        );
-                    }
-                    if let Ok(numa) = dom.get_numa_parameters(0) {
-                        println!("NUMA:");
-                        println!("    Node Set: {}", numa.node_set.unwrap_or_default());
-                        println!("    Mode: {}", numa.mode.unwrap_or(0));
-                    }
-
-                    if let Ok((sched_type, nparams)) = dom.get_scheduler_type() {
-                        println!("SchedType: {}, nparams: {}", sched_type, nparams);
-                    }
-
-                    if let Ok(sched_info) = dom.get_scheduler_parameters() {
-                        println!("Schedule Information:");
-                        println!("\tScheduler\t: {}", sched_info.scheduler_type);
-                        if let Some(shares) = sched_info.cpu_shares {
-                            println!("\tcpu_shares\t: {}", shares);
-                        }
-                        if let Some(period) = sched_info.vcpu_bw.period {
-                            println!("\tvcpu_period\t: {}", period);
-                        }
-                        if let Some(quota) = sched_info.vcpu_bw.quota {
-                            println!("\tvcpu_quota\t: {}", quota);
-                        }
-                        if let Some(period) = sched_info.emulator_bw.period {
-                            println!("\temulator_period\t: {}", period);
-                        }
-                        if let Some(quota) = sched_info.emulator_bw.quota {
-                            println!("\temulator_quota\t: {}", quota);
-                        }
-                        if let Some(period) = sched_info.global_bw.period {
-                            println!("\tglobal_period\t: {}", period);
-                        }
-                        if let Some(quota) = sched_info.global_bw.quota {
-                            println!("\tglobal_quota\t: {}", quota);
-                        }
-                        if let Some(period) = sched_info.global_bw.period {
-                            println!("\tiothread_period\t: {}", period);
-                        }
-                        if let Some(quota) = sched_info.global_bw.quota {
-                            println!("\tiothread_quota\t: {}", quota);
-                        }
+                        log::info!("Domain info:");
+                        log::info!("    State: {}", dinfo.state);
+                        log::info!("    Max Memory: {}", dinfo.max_mem);
+                        log::info!("    Memory: {}", dinfo.memory);
+                        log::info!("    CPUs: {}", dinfo.nr_virt_cpu);
+                        log::info!("    CPU Time: {}", dinfo.cpu_time);
                     }
                 }
             }
@@ -112,11 +65,14 @@ fn disconnect(mut conn: Connect) {
     if let Err(e) = conn.close() {
         panic!("Failed to disconnect from hypervisor: {}", e);
     }
-    println!("Disconnected from hypervisor");
+    log::info!("Disconnected from hypervisor");
 }
 fn main() {
+    // init logger
+    env_logger::init();
+
     let uri = env::args().nth(1).expect("failed to get uri");
-    println!("Attempting to connect to hypervisor: '{:?}'", uri);
+    log::info!("Attempting to connect to hypervisor: '{:?}'", uri);
 
     let mut conn = match Connect::open(&uri) {
         Ok(c) => c,
@@ -124,7 +80,7 @@ fn main() {
     };
 
     match conn.get_uri() {
-        Ok(u) => println!("Connected to hypervisor at '{}'", u),
+        Ok(u) => log::info!("Connected to hypervisor at '{}'", u),
         Err(e) => {
             disconnect(conn);
             panic!("Failed to get URI for hypervisor connection: {}", e);
@@ -145,24 +101,52 @@ fn main() {
     if let Ok(mut dom) = Domain::lookup_by_name(&conn, name) {
         assert_eq!(Ok(()), dom.free());
         assert_eq!(Ok(0), conn.close());
-        println!("already defined qemu domain");
+        log::info!("already defined qemu domain");
     } else {
-        println!("define qemu domain");
+        log::info!("define qemu domain");
+        /*
+        qemu-system-x86_64
+            -drive file=zig-out/bin/mew.iso,index=0,media=disk,format=raw
+            -m 512
+            -smp 2
+            -device virtio-net,netdev=net0,disable-legacy=on,disable-modern=off
+            -netdev user,id=net0,hostfwd=tcp:127.0.0.1:20022-:22,hostfwd=tcp:127.0.0.1:20080-:80
+            -no-shutdown
+            -no-reboot
+            -nographic
+        */
         let xml = format!(
             "<domain type=\"qemu\">
 		         <name>{}</name>
-                         <memory unit=\"KiB\">128</memory>
+                         <memory unit=\"KiB\">524288</memory>
+                         <vcpu placement='static'>2</vcpu>
                          <features>
                            <acpi/>
                            <apic/>
                          </features>
                          <os>
-                           <type>hvm</type>
+                           <type arch='x86_64' machine='pc-i440fx-2.9'>hvm</type>
+                           <boot dev='hd'/>
                          </os>
+                         <devices>
+                            <emulator>/usr/bin/qemu-system-x86_64</emulator>
+                            <disk type='file' device='disk'>
+                                <driver name='qemu' type='raw'/>
+                                <source file='/home/ainno/Projects/mewz/zig-out/bin/mew.iso'/>
+                                <target dev='hda'/>
+                            </disk>
+                            <interface type='network'>
+                                <mac address='52:54:0:12:34:56'/>
+                                <source network='default'/>
+                                <model type='virtio'/>
+                            </interface>
+                            <graphics type='vnc' port='-1' autoport='yes'/>
+                         </devices>
                        </domain>",
             name
         );
         let result: Result<Domain, Error> = Domain::define_xml(&conn, &xml);
         result.expect("failed to define_xml");
+        log::info!("Successfully define qemu domain");
     }
 }

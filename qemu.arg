@@ -1,0 +1,9 @@
+qemu-system-x86_64 \
+            -drive file=zig-out/bin/mew.iso,index=0,media=disk,format=raw \
+            -m 512 \
+            -smp 2 \
+            -device virtio-net,netdev=net0,disable-legacy=on,disable-modern=off \
+            -netdev user,id=net0,hostfwd=tcp:127.0.0.1:20022-:22,hostfwd=tcp:127.0.0.1:20080-:80 \
+            -no-shutdown \
+            -no-reboot \
+            -nographic
