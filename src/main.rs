@@ -99,49 +99,66 @@ fn main() {
 
     let name = "libvirt-rs-mewz";
     if let Ok(mut dom) = Domain::lookup_by_name(&conn, name) {
+        log::info!("already defined qemu domain");
+        let _ = dom.destroy();
+        let _ = dom.undefine();
+        log::info!("destroy and undefine qemu domain");
         assert_eq!(Ok(()), dom.free());
         assert_eq!(Ok(0), conn.close());
-        log::info!("already defined qemu domain");
+
     } else {
         log::info!("define qemu domain");
         /*
-        qemu-system-x86_64
-            -drive file=zig-out/bin/mew.iso,index=0,media=disk,format=raw
-            -m 512
-            -smp 2
-            -device virtio-net,netdev=net0,disable-legacy=on,disable-modern=off
-            -netdev user,id=net0,hostfwd=tcp:127.0.0.1:20022-:22,hostfwd=tcp:127.0.0.1:20080-:80
-            -no-shutdown
-            -no-reboot
-            -nographic
+        const run_cmd_str = &[_][]const u8{
+        "qemu-system-x86_64",
+        "-kernel",
+        "zig-out/bin/mewz.elf",
+        "-m",
+        "512",
+        "-device",
+        "virtio-net,netdev=net0,disable-legacy=on,disable-modern=off",
+        "-netdev",
+        "user,id=net0,hostfwd=tcp:127.0.0.1:20022-:22,hostfwd=tcp:127.0.0.1:20080-:80",
+        "-no-shutdown",
+        "-no-reboot",
+        "-serial",
+        "mon:stdio",
+        "-nographic",
+    };
         */
         let xml = format!(
             "<domain type=\"qemu\">
 		         <name>{}</name>
                          <memory unit=\"KiB\">524288</memory>
-                         <vcpu placement='static'>2</vcpu>
-                         <features>
-                           <acpi/>
-                           <apic/>
-                         </features>
+                         <vcpu>2</vcpu>
                          <os>
-                           <type arch='x86_64' machine='pc-i440fx-2.9'>hvm</type>
+                           <type arch='x86_64' machine='pc'>hvm</type>
                            <boot dev='hd'/>
+                           <kernel>/home/ainno/Projects/mew/zig-out/bin/mewz.elf</kernel>
                          </os>
+                         <features>
+                            <acpi/>
+                            <apic/>
+                            <pae/>
+                         </features>
+                         <on_poweroff>destroy</on_poweroff>
+                         <on_reboot>restart</on_reboot>
+                         <on_crash>restart</on_crash>
                          <devices>
                             <emulator>/usr/bin/qemu-system-x86_64</emulator>
-                            <disk type='file' device='disk'>
-                                <driver name='qemu' type='raw'/>
-                                <source file='/home/ainno/Projects/mewz/zig-out/bin/mew.iso'/>
-                                <target dev='hda'/>
-                            </disk>
                             <interface type='network'>
                                 <mac address='52:54:0:12:34:56'/>
                                 <source network='default'/>
                                 <model type='virtio'/>
                             </interface>
                             <graphics type='vnc' port='-1' autoport='yes'/>
+                            <serial type='pty'>
+                                <target port='0'/>
+                            </serial>
                          </devices>
+                         <qemu:arg value='-no-shutdown'/>
+                         <qemu:arg value='-no-reboot'/>
+                         <qemu:arg value='-nographic'/>
                        </domain>",
             name
         );
